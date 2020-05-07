@@ -34,11 +34,11 @@
 #include "lsquic_logger.h"
 
 #define FAST_CONVERGENCE        1
-#define BETA                    205     /* 205/1024 */
-#define C                       410     /* 410/1024 */
+//#define TWO_MINUS_BETA_OVER_TWO 1024     /* 922/1024 */
 #define TWO_MINUS_BETA_OVER_TWO 922     /* 922/1024 */
 #define ONE_MINUS_BETA          819     /* 819/1024 */
-#define ONE_OVER_C              2560    /* 2560/1024 */
+
+static int one_minus_beta = ONE_MINUS_BETA;
 
 static void
 cubic_reset (struct lsquic_cubic *cubic)
@@ -89,7 +89,7 @@ cubic_update (struct lsquic_cubic *cubic, lsquic_time_t now, unsigned n_bytes)
 
     if (cubic->cu_flags & CU_TCP_FRIENDLY)
     {
-        cubic->cu_tcp_cwnd += n_bytes * TCP_MSS * ONE_MINUS_BETA / 1024
+        cubic->cu_tcp_cwnd += n_bytes * TCP_MSS * one_minus_beta / 1024
                             / cubic->cu_tcp_cwnd;
         LSQ_DEBUG("delta_t: %lf; last_max: %lu; cu_tcp_cwnd: %lu; target: "
             "%"PRIu64"; over: %d; left: %d", delta_t, cubic->cu_last_max_cwnd,
@@ -124,6 +124,14 @@ lsquic_cubic_init (void *cong_ctl, const struct lsquic_conn_public *conn_pub,
     cubic->cu_conn  = conn_pub->lconn;
     cubic->cu_rtt_stats = &conn_pub->rtt_stats;
     cubic->cu_flags = DEFAULT_CUBIC_FLAGS;
+    
+    const char *ptr = getenv("turbo");
+    if (ptr) {
+        one_minus_beta = atoi(ptr);
+        if (!one_minus_beta) {
+            one_minus_beta = ONE_MINUS_BETA;
+        }
+    }
 #ifndef NDEBUG
     const char *s;
     s = getenv("LSQUIC_CUBIC_SAMPLING_RATE");
@@ -209,7 +217,7 @@ lsquic_cubic_loss (void *cong_ctl)
         cubic->cu_last_max_cwnd = cubic->cu_cwnd * TWO_MINUS_BETA_OVER_TWO / 1024;
     else
         cubic->cu_last_max_cwnd = cubic->cu_cwnd;
-    cubic->cu_cwnd = cubic->cu_cwnd * ONE_MINUS_BETA / 1024;
+    cubic->cu_cwnd = cubic->cu_cwnd * one_minus_beta / 1024;
     cubic->cu_tcp_cwnd = cubic->cu_cwnd;
     cubic->cu_ssthresh = cubic->cu_cwnd;
     LSQ_INFO("loss detected, last_max_cwnd: %lu, cwnd: %lu",
