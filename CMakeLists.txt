@@ -96,6 +96,13 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  ${MY_CMAKE_FLAGS} $ENV{EXTRA_CFLAGS}")
 
 MESSAGE(STATUS "Compiler flags: ${CMAKE_C_FLAGS}")
 
+IF (CMAKE_SYSTEM_NAME STREQUAL Android)
+    set(BORINGSSL_INCLUDE "${BORINGSSL_DIR}/include")
+    set(BORINGSSL_LIB_ssl "${BORINGSSL_DIR}/ssl/libssl.a")
+    set(BORINGSSL_LIB_crypto "${BORINGSSL_DIR}/crypto/libcrypto.a")
+    set(BORINGSSL_LIB_decrepit "${BORINGSSL_DIR}/decrepit/libdecrepit.a")
+ENDIF()
+
 IF (NOT DEFINED BORINGSSL_INCLUDE AND DEFINED BORINGSSL_DIR)
     FIND_PATH(BORINGSSL_INCLUDE NAMES openssl/ssl.h
                 PATHS ${BORINGSSL_DIR}/include
@@ -166,6 +173,8 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     link_directories( /usr/local/lib )
 ENDIF()
 
+IF (NOT DO_TESTS STREQUAL "NO")
+
 # Find zlib and libevent header files and library files
 # TODO: libevent is not strictly necessary to build the library.
 FIND_PATH(ZLIB_INCLUDE_DIR NAMES zlib.h)
@@ -195,6 +204,8 @@ ELSE()
 ENDIF()
 IF (CMAKE_SYSTEM_NAME STREQUAL Windows)
     FIND_LIBRARY(EVENT_LIB event)
+ELSEIF (CMAKE_SYSTEM_NAME STREQUAL Android)
+    set(EVENT_LIB "${EVENT_DIR}/libevent.la")
 ELSE()
     FIND_LIBRARY(EVENT_LIB libevent.a)
     IF(NOT EVENT_LIB)
@@ -247,11 +258,12 @@ TARGET_LINK_LIBRARIES(md5_client  ${LIBS})
 TARGET_LINK_LIBRARIES(echo_server ${LIBS})
 TARGET_LINK_LIBRARIES(echo_client ${LIBS})
 
+add_subdirectory(test)
+ENDIF() # DO_TESTS
+
 add_subdirectory(src)
 
-add_subdirectory(test)
-
-IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
+IF(CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT DO_TESTS STREQUAL "NO")
     # Our test framework relies on assertions, only compile if assertions are
     # enabled.
     #

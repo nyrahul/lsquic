@@ -354,7 +354,7 @@ sport_new (const char *optarg, struct prog *prog)
                                                         gai_strerror(e));
             goto err;
         }
-        if (res->ai_addrlen > sizeof(sport->sas))
+        if ((unsigned int)res->ai_addrlen > sizeof(sport->sas))
         {
             LSQ_ERROR("resolved socket length is too long");
             goto err;
