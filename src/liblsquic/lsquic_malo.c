@@ -137,7 +137,12 @@ lsquic_malo_create (size_t obj_size)
           || (float) obj_size / (1 << nbits) > ROUNDUP_THRESH;
 
     struct malo *malo;
+#ifdef ANDROID
+    malo = memalign(0x1000, 0x1000);
+    if (!malo)
+#else
     if (0 != posix_memalign((void **) &malo, 0x1000, 0x1000))
+#endif
         return NULL;
 
     SLIST_INIT(&malo->all_pages);
@@ -195,7 +200,12 @@ static struct malo_page *
 allocate_page (struct malo *malo)
 {
     struct malo_page *page;
+#ifdef ANDROID
+    page = memalign(0x1000, 0x1000);
+    if (!page)
+#else
     if (0 != posix_memalign((void **) &page, 0x1000, 0x1000))
+#endif
         return NULL;
     SLIST_INSERT_HEAD(&malo->all_pages, page, next_page);
     LIST_INSERT_HEAD(&malo->free_pages, page, next_free_page);
