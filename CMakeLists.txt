@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT(lsquic C)
 
+OPTION(LSQUIC_FIU "Use Fault Injection in Userspace (FIU)" OFF)
+OPTION(LSQUIC_BIN "Compile example binaries that use the library" ON)
+OPTION(LSQUIC_TESTS "Compile library unit tests" ON)
+
 IF (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # If using older glibc, need to link with -lrt.  See clock_getres(2).
     EXECUTE_PROCESS(
@@ -12,6 +16,11 @@ IF (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     IF(NOT GLIBC_VERSION EQUAL "" AND GLIBC_VERSION VERSION_LESS 2.17)
         SET(LIBS ${LIBS} rt)
     ENDIF()
+ELSEIF (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    # for android-ndk >= r19b
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY "BOTH")
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE "BOTH")
+    set(CMAKE_FIND_ROOT_PATH_MODE_PATH "BOTH")
 ENDIF()
 
 IF("${CMAKE_BUILD_TYPE}" STREQUAL "")
@@ -19,8 +28,6 @@ IF("${CMAKE_BUILD_TYPE}" STREQUAL "")
 ENDIF()
 
 MESSAGE(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-
-OPTION(LSQUIC_FIU "Use Fault Injection in Userspace (FIU)" OFF)
 
 IF (NOT "$ENV{EXTRA_CFLAGS}" MATCHES "-DLSQUIC_DEBUG_NEXT_ADV_TICK")
     SET(MY_CMAKE_FLAGS "-DLSQUIC_DEBUG_NEXT_ADV_TICK=1")
@@ -96,13 +103,6 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  ${MY_CMAKE_FLAGS} $ENV{EXTRA_CFLAGS}")
 
 MESSAGE(STATUS "Compiler flags: ${CMAKE_C_FLAGS}")
 
-IF (CMAKE_SYSTEM_NAME STREQUAL Android)
-    set(BORINGSSL_INCLUDE "${BORINGSSL_DIR}/include")
-    set(BORINGSSL_LIB_ssl "${BORINGSSL_DIR}/ssl/libssl.a")
-    set(BORINGSSL_LIB_crypto "${BORINGSSL_DIR}/crypto/libcrypto.a")
-    set(BORINGSSL_LIB_decrepit "${BORINGSSL_DIR}/decrepit/libdecrepit.a")
-ENDIF()
-
 IF (NOT DEFINED BORINGSSL_INCLUDE AND DEFINED BORINGSSL_DIR)
     FIND_PATH(BORINGSSL_INCLUDE NAMES openssl/ssl.h
                 PATHS ${BORINGSSL_DIR}/include
@@ -173,8 +173,6 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     link_directories( /usr/local/lib )
 ENDIF()
 
-IF (NOT DO_TESTS STREQUAL "NO")
-
 # Find zlib and libevent header files and library files
 # TODO: libevent is not strictly necessary to build the library.
 FIND_PATH(ZLIB_INCLUDE_DIR NAMES zlib.h)
@@ -196,6 +194,8 @@ IF(ZLIB_LIB)
 ELSE()
     MESSAGE(STATUS "zlib not found")
 ENDIF()
+
+IF (LSQUIC_BIN)
 FIND_PATH(EVENT_INCLUDE_DIR NAMES event2/event.h)
 IF (EVENT_INCLUDE_DIR)
     INCLUDE_DIRECTORIES(${EVENT_INCLUDE_DIR})
@@ -204,8 +204,6 @@ ELSE()
 ENDIF()
 IF (CMAKE_SYSTEM_NAME STREQUAL Windows)
     FIND_LIBRARY(EVENT_LIB event)
-ELSEIF (CMAKE_SYSTEM_NAME STREQUAL Android)
-    set(EVENT_LIB "${EVENT_DIR}/libevent.la")
 ELSE()
     FIND_LIBRARY(EVENT_LIB libevent.a)
     IF(NOT EVENT_LIB)
@@ -218,11 +216,11 @@ ELSE()
     MESSAGE(STATUS "libevent not found")
 ENDIF()
 
-add_executable(http_server test/http_server.c test/prog.c test/test_common.c test/test_cert.c)
-add_executable(md5_server test/md5_server.c test/prog.c test/test_common.c test/test_cert.c)
-add_executable(md5_client test/md5_client.c test/prog.c test/test_common.c test/test_cert.c)
-add_executable(echo_server test/echo_server.c test/prog.c test/test_common.c test/test_cert.c)
-add_executable(echo_client test/echo_client.c test/prog.c test/test_common.c test/test_cert.c)
+add_executable(http_server bin/http_server.c bin/prog.c bin/test_common.c bin/test_cert.c)
+add_executable(md5_server bin/md5_server.c bin/prog.c bin/test_common.c bin/test_cert.c)
+add_executable(md5_client bin/md5_client.c bin/prog.c bin/test_common.c bin/test_cert.c)
+add_executable(echo_server bin/echo_server.c bin/prog.c bin/test_common.c bin/test_cert.c)
+add_executable(echo_client bin/echo_client.c bin/prog.c bin/test_common.c bin/test_cert.c)
 
 
 SET(LIBS lsquic ${EVENT_LIB} ${BORINGSSL_LIB_ssl} ${BORINGSSL_LIB_crypto} ${ZLIB_LIB} ${LIBS})
@@ -230,10 +228,10 @@ SET(LIBS lsquic ${EVENT_LIB} ${BORINGSSL_LIB_ssl} ${BORINGSSL_LIB_crypto} ${ZLIB
 IF (NOT MSVC)
 
 add_executable(http_client
-    test/http_client.c
-    test/prog.c
-    test/test_common.c
-    test/test_cert.c
+    bin/http_client.c
+    bin/prog.c
+    bin/test_common.c
+    bin/test_cert.c
 )
 LIST(APPEND LIBS pthread m)
 
@@ -241,9 +239,9 @@ LIST(APPEND LIBS pthread m)
 ELSE()
 
 add_executable(http_client
-    test/http_client.c
-    test/prog.c
-    test/test_common.c
+    bin/http_client.c
+    bin/prog.c
+    bin/test_common.c
     wincompat/getopt.c
     wincompat/getopt1.c
 )
@@ -258,16 +256,17 @@ TARGET_LINK_LIBRARIES(md5_client  ${LIBS})
 TARGET_LINK_LIBRARIES(echo_server ${LIBS})
 TARGET_LINK_LIBRARIES(echo_client ${LIBS})
 
-add_subdirectory(test)
-ENDIF() # DO_TESTS
+add_subdirectory(bin)
+ENDIF() # LSQUIC_BIN
 
 add_subdirectory(src)
 
-IF(CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT DO_TESTS STREQUAL "NO")
+IF(LSQUIC_TESTS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Our test framework relies on assertions, only compile if assertions are
     # enabled.
     #
     enable_testing()
+    add_subdirectory(tests)
 ENDIF()
 
 
